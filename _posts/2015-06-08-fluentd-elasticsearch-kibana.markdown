@@ -2,7 +2,7 @@
 layout: post
 title:  "日志管理工具的安装与配置"
 date:   2015-06-08
-categories: 日志管理
+categories: 工具
 ---
 有很多[日志管理工具](http://www.importnew.com/12383.html)，除了这些还有 [InfluxDB + Grafana](https://ruby-china.org/topics/23470) 的组合。工具这么多，但还是有区别的，例如 ELK (logstash, elasticsearch, kibana) 侧重日志信息的收集、储存和搜索， InfluxDB + Grafana 侧重数据的监控。
 
@@ -31,16 +31,27 @@ sudo service td-agent start
 
 rails 整合 fluentd 很简单，在 Gemfile 加上 [act-fluent-logger-rails](https://github.com/actindi/act-fluent-logger-rails) 这个 gem 。
 
+[补充](http://www.fluentd.org/datasources/rails)两个gem到 `Gemfile` , 修改日志输出格式：
+
+```
+gem 'lograge'
+gem "logstash-event"
+```
+
 环境配置文件 `config/environments/*.rb` ：
 
 ```ruby
 config.log_level = :info
-  config.logger = ActFluentLoggerRails::Logger.new(
-    log_tags: {
-      ip: :ip,
-      ua: :user_agent,
-      uid: ->(request) { request.session[:uid] }
-  })
+config.logger = ActFluentLoggerRails::Logger.new(
+  log_tags: {
+    ip: :ip,
+    ua: :user_agent,
+    uid: ->(request) { request.session[:uid] }
+})
+config.lograge.enabled = true
+config.lograge.formatter = Lograge::Formatters::Logstash.new
+# or use json format
+# config.lograge.formatter = Lograge::Formatters::Json.new 
 ```
 
 新建 `config/fluent-logger.yml` ：
@@ -105,7 +116,7 @@ Elasticsearch 用于索引和搜索 log 的信息。
 
 #### 环境要求
 
-`Java 8 update 20 or later, or Java 7 update 55 or later`
+>Java 8 update 20 or later, or Java 7 update 55 or later
 
 建议安装最新版 jdk
 
@@ -114,12 +125,14 @@ java -version
 yum remove java-1.6.0-openjdk  # 如果jdk低于要求，删除旧的jdk
 yum search java | grep openjdk
 yum install java-1.8.0-openjdk.x86_64
-
+# 或者安装O记的jdk
+wget http://download.oracle.com/otn-pub/java/jdk/8u45-b14/jdk-8u45-linux-x64.rpm
+rpm -ivh jdk-8u45-linux-x64.rpm
 ```
 
 #### 安装
 
-官方提供文件和库两种安装方式，我选择库安装的方法：
+官方提供二进制文件和库两种安装方式，我选择库安装的方法：
 
 ```
 rpm --import https://packages.elastic.co/GPG-KEY-elasticsearch
@@ -178,3 +191,12 @@ kibana-4.1.1-linux-x64/bin/kibana
 用浏览器访问 `http://yourhost.com:5601` ，参考[简单设置](http://kibana.logstash.es/content/kibana/v4/setup.html#%E8%AE%A9-kibana-%E8%BF%9E%E6%8E%A5%E5%88%B0-elasticsearch)完成初步配置。
 
 启动我们之前设置好的 rails 项目，访问一两个网页，我们就可以在 kibana 上看到日志的信息了 ![kibana-example](http://r.loli.io/VV7JRv.png)
+
+#### 过滤日志
+
+```
+# 只获取 get 方法访问的日志信息
+"'method':'GET'"
+# 只获取 返回码为 200 的日志信息
+"'status':'200'"
+```
